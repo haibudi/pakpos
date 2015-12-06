@@ -13,9 +13,6 @@ type SubcribtionType int
 const (
 	ServerBroadcaster ServerRole = 1
 	ServerSubscriber  ServerRole = 10
-
-	SubcribeAll     SubcribtionType = 0
-	SubcribeChannel SubcribtionType = 1
 )
 
 type FnMessage func(toolkit.KvString) interface{}
@@ -106,23 +103,25 @@ func (b *Broadcaster) removeChannelSubscriber(channel, subscriber string) {
 	}
 }
 
-func (b *Broadcaster) Broadcast(k string, v interface{}) (*Message, error) {
-	b.Server.Log().Info(fmt.Sprintf("Broadcasting %s to %d server(s)", k, len(b.Subscibers)))
-	var mm *Message
+func (b *Broadcaster) Broadcast(k string, v interface{}) (*MessageMonitor, error) {
+	var mm *MessageMonitor
 	lk := strings.ToLower(k)
+	targets := b.getChannelSubscribers(k)
 	if lk == "stop" {
-		mm = NewMessageMonitor(b.Subscibers, "stop", k, v, DefaultExpiry())
+		mm = NewMessageMonitor(targets, "stop", k, v, DefaultExpiry())
 	} else {
-		mm = NewMessageMonitor(b.Subscibers, "", k, v, DefaultExpiry())
+		mm = NewMessageMonitor(targets, "", k, v, DefaultExpiry())
 	}
 	mm.DistributionType = DistributeAsBroadcast
+	b.Server.Log().Info(fmt.Sprintf("Broadcasting %s to %d server(s)", k, len(mm.Targets)))
 	return mm, nil
 }
 
-func (b *Broadcaster) Que(k string, v interface{}) (*Message, error) {
-	b.Server.Log().Info(fmt.Sprintf("Create new que  %s to %d server(s)", k, len(b.Subscibers)))
-	mm := NewMessageMonitor(b.Subscibers, "", k, v, DefaultExpiry())
+func (b *Broadcaster) Que(k string, v interface{}) (*MessageMonitor, error) {
+	targets := b.getChannelSubscribers(k)
+	mm := NewMessageMonitor(targets, "", k, v, DefaultExpiry())
 	mm.DistributionType = DistributeAsQue
+	b.Server.Log().Info(fmt.Sprintf("Create new que  %s to %d server(s)", k, len(mm.Targets)))
 	return mm, nil
 }
 
@@ -133,6 +132,16 @@ func (b *Broadcaster) initRoute() {
 		b.Subscibers = append(b.Subscibers, url)
 		kr.Server.Log().Info(fmt.Sprintf("Add node %s to %s", url, b.Address))
 		return "OK"
+	})
+
+	//-- add channel subscribtion
+	b.Route("/channelregister", func(k *knot.WebContext) interface{} {
+		k.Config.OutputType = knot.OutputJson
+		result := toolkit.NewResult()
+		cr := &ChannelRegister{}
+		k.GetPayload(cr)
+		b.addChannelSubcriber(cr.Channel, cr.Subscriber)
+		return result
 	})
 
 	//-- get the message (used for DstributeAsQue type)

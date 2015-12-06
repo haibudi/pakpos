@@ -51,14 +51,21 @@ func TestBroadcast(t *testing.T) {
 	}
 }
 
-/*
 func TestSubscribe(t *testing.T) {
-	subs[0].SubcribtionType = SubcribeChannel
-	subs[1].SubcribtionType = SubcribeChannel
-	subs[0].AddChannel("Group1")
-	subs[0].AddChannel("Group1")
+	//subs[0].SubcribtionType = SubcribeChannel
+	//subs[1].SubcribtionType = SubcribeChannel
+	e1 := subs[1].AddChannel("Group1")
+	e2 := subs[3].AddChannel("Group1")
+	if e1 != nil || e2 != nil {
+		t.Errorf("Unable to add channel:\n1: %v\n2: %v", e1, e2)
+		return
+	}
 	mm, _ := b.Broadcast("Group1:OK", "OK Data")
 	mm.Wait()
+	want := 2
+	if len(mm.Targets) != want {
+		t.Errorf("Invalid target, want %d got %d", want, len(mm.Targets))
+	}
 }
 
 func TestSubscribeQue(t *testing.T) {
@@ -68,18 +75,26 @@ func TestSubscribeQue(t *testing.T) {
 	var es []string
 	for _, s := range subs {
 		s.Log().Info(fmt.Sprintf("Receive que on node %s", s.Address))
-		_, e := s.Receive("Que01")
+		qv, e := s.Receive("Que01")
 		if e != nil {
 			es = append(es, e.Error())
 		}
-		time.Sleep(time.Duration(toolkit.RandInt(5000)) * time.Millisecond)
+		if toolkit.IsValid(qv) == false {
+			es = append(es, "Invalid que value returned. It is either nil or not valid")
+		} else {
+			if qv.(string) != "Queie 01" {
+				es = append(es, "Invalid que value returned. Got "+qv.(string))
+			} else {
+				t.Logf("Receiving %s", qv.(string))
+			}
+		}
+		time.Sleep(time.Duration(toolkit.RandInt(100)) * time.Millisecond)
 	}
 
-	if len(es) == 0 {
-		t.Errorf("Fail to receive que because: %s", strings.Join(es, "\n"))
+	if len(es) != 0 {
+		t.Errorf("Fail to receive que because: \n%s", strings.Join(es, "\n"))
 	}
 }
-*/
 
 func TestStop(t *testing.T) {
 	time.Sleep(1 * time.Millisecond) //-- just to make sure time package used

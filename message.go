@@ -31,17 +31,20 @@ func DefaultExpiry() time.Duration {
 }
 
 type Message struct {
+	Key     string
+	Command string
+	Data    interface{}
+	Expiry  time.Time
+}
+
+type MessageMonitor struct {
 	sync.Mutex
+	Message
 	Success          int
 	Fail             int
 	Targets          []string
 	Status           []string
 	DistributionType DistributionType
-
-	Key     string
-	Command string
-	Data    interface{}
-	Expiry  time.Time
 }
 
 func ParseKey(key string) (string, string) {
@@ -52,8 +55,8 @@ func ParseKey(key string) (string, string) {
 	return keys[0], strings.Join(keys[1:], ":")
 }
 
-func NewMessageMonitor(targets []string, command, key string, data interface{}, expiryAfter time.Duration) *Message {
-	m := new(Message)
+func NewMessageMonitor(targets []string, command, key string, data interface{}, expiryAfter time.Duration) *MessageMonitor {
+	m := new(MessageMonitor)
 	m.Targets = targets
 	m.Key = key
 	m.Command = command
@@ -65,7 +68,7 @@ func NewMessageMonitor(targets []string, command, key string, data interface{}, 
 	return m
 }
 
-func (m *Message) Wait() {
+func (m *MessageMonitor) Wait() {
 	if m.DistributionType == DistributeAsBroadcast {
 		m.ditributeBroadcast()
 	} else if m.DistributionType == DistributeAsQue {
@@ -73,7 +76,7 @@ func (m *Message) Wait() {
 	}
 }
 
-func (m *Message) setSuccessFail(k int, status string) {
+func (m *MessageMonitor) setSuccessFail(k int, status string) {
 	m.Lock()
 	if status == "OK" {
 		if m.Status[k] == "" {
@@ -105,7 +108,7 @@ func (m *Message) setSuccessFail(k int, status string) {
 	}
 }
 
-func (m *Message) ditributeBroadcast() {
+func (m *MessageMonitor) ditributeBroadcast() {
 	//for len(m.Targets) != m.Success && time.Now().After(m.Expiry) == false {
 	wg := new(sync.WaitGroup)
 	for k, t := range m.Targets {
@@ -120,11 +123,8 @@ func (m *Message) ditributeBroadcast() {
 					command = "msg"
 				}
 				url = fmt.Sprintf("http://%s/%s", t, command)
-				r, ecall := toolkit.HttpCall(url, "POST", toolkit.Jsonify(struct {
-					Key    string
-					Data   interface{}
-					Expiry time.Time
-				}{m.Key, m.Data, m.Expiry}), nil)
+				r, ecall := toolkit.HttpCall(url, "POST",
+					toolkit.Jsonify(Message{Key: m.Key, Data: m.Data, Expiry: m.Expiry}), nil)
 				if ecall != nil {
 					m.setSuccessFail(k, "CALL ERROR: "+url+" ERR:"+ecall.Error())
 				} else if r.StatusCode != 200 {
@@ -148,7 +148,7 @@ func (m *Message) ditributeBroadcast() {
 	//}
 }
 
-func (m *Message) distributeQue() {
+func (m *MessageMonitor) distributeQue() {
 	//--- inform all targets that new message has been created
 
 	//-- loop while not all target complete receival or expire

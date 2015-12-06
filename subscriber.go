@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"github.com/eaciit/knot/knot.v1"
 	"github.com/eaciit/toolkit"
-	"io/ioutil"
+	//"io/ioutil"
 )
 
 type Subscriber struct {
 	PosServer
 	Protocol           string
 	BroadcasterAddress string
-	SubcribtionType    SubcribtionType
 	Channels           []*Channel
 }
 
@@ -48,26 +47,14 @@ func (s *Subscriber) Start(address string) error {
 	s.Route("/msg", func(k *knot.WebContext) interface{} {
 		k.Config.OutputType = knot.OutputJson
 		result := toolkit.NewResult()
-		//var payload toolkit.M
-		//ePayLoad := k.GetPayload(&payload)
-
-		//--- get payload
-		defer k.Request.Body.Close()
-		bs, ePayload := ioutil.ReadAll(k.Request.Body)
-		if ePayload != nil {
-			result.Status = toolkit.Status_NOK
-			result.Message = "SUBS PAYLOAD ERROR " + ePayload.Error()
-		}
-
 		var payload Message
-		eDecode := toolkit.Unjson(bs, &payload)
+		eDecode := k.GetPayload(&payload)
 		if eDecode != nil {
 			result.Status = toolkit.Status_NOK
-			result.Message = fmt.Sprintf("SUBS DECODE ERROR %v ERR %s", bs, eDecode.Error())
+			result.Message = fmt.Sprintf("Subscriber Message Decode Error %s", eDecode.Error())
 		} else {
 			result.Data = payload
 		}
-		//k.Server.Log().Info(fmt.Sprintf("Data received is %v", payload.Data))
 		return result
 	})
 
@@ -90,7 +77,29 @@ func (s *Subscriber) Receive(k string) (interface{}, error) {
 	return nil, nil
 }
 
-func (s *Subscriber) AddChannel(c string) {
+type ChannelRegister struct {
+	Channel    string
+	Subscriber string
+}
+
+func (s *Subscriber) AddChannel(c string) error {
+	url := fmt.Sprintf("%s/channelregister", s.BroadcasterAddress)
+	r, e := toolkit.HttpCall(url, "POST", toolkit.Jsonify(ChannelRegister{c, s.Address}), nil)
+	if e != nil {
+		return fmt.Errorf("Channel Register Call Error: %s", e.Error())
+	}
+	if r.StatusCode != 200 {
+		return fmt.Errorf("Channel Register Call Error: %s", r.Status)
+	}
+	result := new(toolkit.Result)
+	e = toolkit.Unjson(toolkit.HttpContent(r), &result)
+	if e != nil {
+		return fmt.Errorf("Channel Register Decode error: %s", e.Error())
+	}
+	if result.Status != toolkit.Status_OK {
+		return fmt.Errorf("Channel Register error: %s", result.Message)
+	}
+	return nil
 }
 
 func (s *Subscriber) AddFn(c string, fn FnMessage) {
