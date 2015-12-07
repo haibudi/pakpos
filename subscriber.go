@@ -136,18 +136,21 @@ func (s *Subscriber) getMsgAsResult(key string) *toolkit.Result {
 			} else if r.StatusCode != 200 {
 				result.SetErrorTxt("Subsciber ReceiveMsg Call Error: " + r.Status)
 			} else {
-				var resultMsg toolkit.Result
+				//var resultMsg toolkit.Result
 				e := toolkit.Unjson(toolkit.HttpContent(r),
-					&resultMsg)
+					&result)
 				if e != nil {
 					result.SetErrorTxt(fmt.Sprintf("Subsciber ReceiveMsg Decode Error: ", e.Error()))
-				} else {
+				}
+				/*else {
+
 					if resultMsg.Status == toolkit.Status_OK {
 						result.Data = resultMsg.Data
 					} else {
 						result.SetErrorTxt(resultMsg.Message)
 					}
 				}
+				*/
 			}
 		}
 	}
