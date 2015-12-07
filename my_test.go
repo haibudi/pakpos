@@ -70,7 +70,14 @@ func TestSubscribe(t *testing.T) {
 
 func TestSubscribeQue(t *testing.T) {
 	mm, _ := b.Que("Que01", "Queue 01")
-	mm.Wait()
+	go func() {
+		mm.Wait()
+	}()
+
+	time.Sleep(2 * time.Millisecond)
+	for _, s := range subs {
+		s.GetMsg("")
+	}
 }
 
 func TestStop(t *testing.T) {

@@ -66,44 +66,10 @@ func (s *Subscriber) Start(address string) error {
 		return result
 	})
 
-	s.Route("/receivemsg", func(k *knot.WebContext) interface{} {
+	s.Route("/getmsg", func(k *knot.WebContext) interface{} {
 		k.Config.OutputType = knot.OutputJson
-		result := toolkit.NewResult()
 		key := k.Query("key")
-		if key == "" {
-			if len(s.messageKeys) > 0 {
-				key = s.messageKeys[0]
-			}
-		}
-
-		// if no key is provided, check from the latest
-		if key == "" {
-			result.Status = toolkit.Status_NOK
-			result.Message = "No key has been provided to receive the message"
-		} else {
-			url := fmt.Sprintf("%s/getmsg", s.BroadcasterAddress)
-			msgQue, exist := s.MessageQues[key]
-			if !exist {
-				result.Status = toolkit.Status_NOK
-				result.Message = "Key " + key + " is not exist on message que or it has been collected"
-			} else {
-				r, e := toolkit.HttpCall(url, "POST",
-					toolkit.Jsonify(msgQue), nil)
-				if e != nil {
-					result.SetErrorTxt("Subscriber ReceiveMsg Call Error: " + e.Error())
-				} else if r.StatusCode != 200 {
-					result.SetErrorTxt("Subsciber ReceiveMsg Call Error: " + r.Status)
-				} else {
-					var msg Message
-					e := toolkit.Unjson(toolkit.HttpContent(r), &msg)
-					if e != nil {
-						result.SetErrorTxt(fmt.Sprintf("Subsciber ReceiveMsg Decode Error: ", e.Error()))
-					} else {
-						result.Data = msg
-					}
-				}
-			}
-		}
+		result := s.getMsgAsResult(key)
 		return result
 	})
 
@@ -137,8 +103,56 @@ func (s *Subscriber) Start(address string) error {
 	return nil
 }
 
-func (s *Subscriber) Receive(k string) (interface{}, error) {
-	return nil, nil
+func (s *Subscriber) GetMsg(key string) (interface{}, error) {
+	result := s.getMsgAsResult(key)
+	return result.Data, result.Error()
+}
+
+func (s *Subscriber) getMsgAsResult(key string) *toolkit.Result {
+	result := toolkit.NewResult()
+	if key == "" {
+		if len(s.messageKeys) > 0 {
+			key = s.messageKeys[0]
+		}
+	}
+
+	// if no key is provided, check from the latest
+	if key == "" {
+		result.Status = toolkit.Status_NOK
+		result.Message = "No key has been provided to receive the message"
+	} else {
+		url := fmt.Sprintf("%s/getmsg", s.BroadcasterAddress)
+		msgQue, exist := s.MessageQues[key]
+		if !exist {
+			result.Status = toolkit.Status_NOK
+			result.Message = "Key " + key + " is not exist on message que or it has been collected"
+		} else {
+			r, e := toolkit.HttpCall(url, "POST",
+				toolkit.Jsonify(msgQue), nil)
+			if e != nil {
+				result.SetErrorTxt("Subscriber ReceiveMsg Call Error: " + e.Error())
+			} else if r.StatusCode != 200 {
+				result.SetErrorTxt("Subsciber ReceiveMsg Call Error: " + r.Status)
+			} else {
+				var msg Message
+				e := toolkit.Unjson(toolkit.HttpContent(r), &msg)
+				if e != nil {
+					result.SetErrorTxt(fmt.Sprintf("Subsciber ReceiveMsg Decode Error: ", e.Error()))
+				} else {
+					result.Data = msg
+				}
+			}
+		}
+	}
+
+	if result.Status == "OK" {
+		url := fmt.Sprintf("%s/msgreceived")
+		toolkit.HttpCall(url, "POST", toolkit.Jsonify(struct {
+			Key        string
+			Subscriber string
+		}{key, s.Address}), nil)
+	}
+	return result
 }
 
 type ChannelRegister struct {

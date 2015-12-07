@@ -32,6 +32,7 @@ type Broadcaster struct {
 	Subscibers []string
 
 	channelSubscribers map[string][]string
+	messages           map[string]*MessageMonitor
 }
 
 func (p *PosServer) Validate() error {
@@ -39,6 +40,7 @@ func (p *PosServer) Validate() error {
 }
 
 func (b *Broadcaster) Start(address string) error {
+	b.messages = map[string]*MessageMonitor{}
 	b.Address = address
 	if e := b.Validate(); e != nil {
 		return e
@@ -143,9 +145,26 @@ func (b *Broadcaster) initRoute() {
 	})
 
 	//-- get the message (used for DstributeAsQue type)
-	b.Route("/msgget", func(k *knot.WebContext) interface{} {
+	b.Route("/getmsg", func(k *knot.WebContext) interface{} {
 		k.Config.OutputType = knot.OutputJson
 		result := toolkit.NewResult()
+		tm := toolkit.M{}
+		e := k.GetPayload(&tm)
+		if e != nil {
+			result.SetErrorTxt(fmt.Sprintf("Broadcaster GetMsg Payload Error: %s", e.Error()))
+		} else {
+			key := tm.Get("key", "").(string)
+			if key == "" {
+				result.SetErrorTxt("Broadcaste GetMsg Error: No key is provided")
+			} else {
+				m, exist := b.messages[key]
+				if exist == false {
+					result.SetErrorTxt("Message " + key + " is not exist")
+				} else {
+					result.Data = m.Message
+				}
+			}
+		}
 		return result
 	})
 
@@ -153,6 +172,28 @@ func (b *Broadcaster) initRoute() {
 	b.Route("/msgreceived", func(k *knot.WebContext) interface{} {
 		k.Config.OutputType = knot.OutputJson
 		result := toolkit.NewResult()
+
+		tm := toolkit.M{}
+		e := k.GetPayload(&tm)
+		if e != nil {
+			result.SetErrorTxt("Broadcaster MsgReceived Payload Error: " + e.Error())
+		} else {
+			key := tm.Get("key", "").(string)
+			subscriber := tm.Get("subscriber", "").(string)
+
+			mm, exist := b.messages[key]
+			if exist == false {
+				result.SetErrorTxt("Broadcaster MsgReceived Error: " + key + " is not exist")
+			} else {
+				for tIndex, t := range mm.Targets {
+					if t == subscriber {
+						mm.Status[tIndex] = "OK"
+						break
+					}
+				}
+			}
+		}
+
 		return result
 	})
 

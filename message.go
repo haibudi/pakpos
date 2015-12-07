@@ -74,6 +74,8 @@ func NewMessageMonitor(broadcaster *Broadcaster, command, key string, data inter
 }
 
 func (m *MessageMonitor) Wait() {
+	//--- add m to broadcaster messages
+	m.Broadcaster.messages[m.Key] = m
 	if m.DistributionType == DistributeAsBroadcast {
 		m.ditributeBroadcast()
 	} else if m.DistributionType == DistributeAsQue {
@@ -85,6 +87,7 @@ func (m *MessageMonitor) Wait() {
 			"(%d out of %d) "+
 			"and will be disposed because already exceed its expiry", m.Key, m.Success, len(m.Targets)))
 	}
+	delete(m.Broadcaster.messages, m.Key)
 }
 
 func (m *MessageMonitor) setSuccessFail(k int, status string) {
@@ -196,5 +199,16 @@ func (m *MessageMonitor) distributeQue() {
 	//-- loop while not all target complete receival or expire
 	for len(m.Targets) != m.Success && time.Now().After(m.Expiry) == false {
 		time.Sleep(1 * time.Millisecond)
+	}
+}
+
+func (m *MessageMonitor) State() string {
+	targetCount := len(m.Targets)
+	if m.Success+m.Fail < targetCount {
+		return "Waiting"
+	} else if m.Success == targetCount {
+		return "OK"
+	} else {
+		return "Not OK"
 	}
 }
