@@ -79,6 +79,12 @@ func (m *MessageMonitor) Wait() {
 	} else if m.DistributionType == DistributeAsQue {
 		m.distributeQue()
 	}
+
+	if m.Success != len(m.Targets) {
+		m.Broadcaster.Log().Warning(fmt.Sprintf("Message %s is not fully received "+
+			"(%d out of %d) "+
+			"and will be disposed because already exceed its expiry", m.Key, m.Success, len(m.Targets)))
+	}
 }
 
 func (m *MessageMonitor) setSuccessFail(k int, status string) {
