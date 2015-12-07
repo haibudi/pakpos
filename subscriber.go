@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eaciit/knot/knot.v1"
 	"github.com/eaciit/toolkit"
+	"strings"
 	//"io/ioutil"
 )
 
@@ -61,7 +62,8 @@ func (s *Subscriber) Start(address string) error {
 			if !exist {
 				s.messageKeys = append(s.messageKeys, msg.Key)
 			}
-			s.messageKeys = append(s.messageKeys, msg.Key)
+			s.MessageQues[msg.Key] = msg
+			//s.messageKeys = append(s.messageKeys, msg.Key)
 		}
 		return result
 	})
@@ -125,7 +127,7 @@ func (s *Subscriber) getMsgAsResult(key string) *toolkit.Result {
 		msgQue, exist := s.MessageQues[key]
 		if !exist {
 			result.Status = toolkit.Status_NOK
-			result.Message = "Key " + key + " is not exist on message que or it has been collected"
+			result.Message = "Key " + key + " is not exist on message que or it has been collected. Available keys are: " + strings.Join(s.messageKeys, ",")
 		} else {
 			r, e := toolkit.HttpCall(url, "POST",
 				toolkit.Jsonify(msgQue), nil)

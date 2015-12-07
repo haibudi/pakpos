@@ -187,7 +187,6 @@ func (m *MessageMonitor) distributeQue() {
 					url, m.Key, r.Status))
 				failtargets = append(failtargets, t)
 			} else {
-
 				newtargets = append(newtargets, t)
 			}
 		}(wg, t)
