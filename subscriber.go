@@ -7,11 +7,19 @@ import (
 	//"io/ioutil"
 )
 
+type MessageQue struct {
+	Key       string
+	Data      interface{}
+	Collected bool
+}
+
 type Subscriber struct {
 	PosServer
 	Protocol           string
 	BroadcasterAddress string
-	Channels           []*Channel
+
+	messageKeys []string
+	MessageQues map[string]*MessageQue
 }
 
 func (s *Subscriber) Validate() error {
@@ -27,6 +35,7 @@ func (s *Subscriber) Validate() error {
 
 func (s *Subscriber) Start(address string) error {
 	s.Address = address
+	s.MessageQues = map[string]*MessageQue{}
 	broadcasterUrl := s.BroadcasterAddress + "/nodeadd?node=" + s.Address
 	r, e := toolkit.HttpCall(broadcasterUrl, "GET", nil, nil)
 	if e != nil {
@@ -38,8 +47,61 @@ func (s *Subscriber) Start(address string) error {
 
 	//-- inform subscriber if newkey is available to be collected
 	s.Route("/newkey", func(k *knot.WebContext) interface{} {
+		result := toolkit.NewResult()
+		k.Config.OutputType = knot.OutputJson
+		msg := new(MessageQue)
+		e := k.GetPayload(&msg)
+		if e != nil {
+			result.Message = e.Error()
+			result.Status = toolkit.Status_NOK
+		} else {
+			msg.Data = nil
+			msg.Collected = false
+			_, exist := s.MessageQues[msg.Key]
+			if !exist {
+				s.messageKeys = append(s.messageKeys, msg.Key)
+			}
+			s.messageKeys = append(s.messageKeys, msg.Key)
+		}
+		return result
+	})
+
+	s.Route("/receivemsg", func(k *knot.WebContext) interface{} {
 		k.Config.OutputType = knot.OutputJson
 		result := toolkit.NewResult()
+		key := k.Query("key")
+		if key == "" {
+			if len(s.messageKeys) > 0 {
+				key = s.messageKeys[0]
+			}
+		}
+		if key == "" {
+			result.Status = toolkit.Status_NOK
+			result.Message = "No key has been provided to receive the message"
+		} else {
+			url := fmt.Sprintf("%s/getmsg", s.BroadcasterAddress)
+			msgQue, exist := s.MessageQues[key]
+			if !exist {
+				result.Status = toolkit.Status_NOK
+				result.Message = "Key " + key + " is not exist on message que or it has been collected"
+			} else {
+				r, e := toolkit.HttpCall(url, "POST",
+					toolkit.Jsonify(msgQue), nil)
+				if e != nil {
+					result.SetErrorTxt("Subscriber ReceiveMsg Call Error: " + e.Error())
+				} else if r.StatusCode != 200 {
+					result.SetErrorTxt("Subsciber ReceiveMsg Call Error: " + r.Status)
+				} else {
+					var msg Message
+					e := toolkit.Unjson(toolkit.HttpContent(r), &msg)
+					if e != nil {
+						result.SetErrorTxt(fmt.Sprintf("Subsciber ReceiveMsg Decode Error: ", e.Error()))
+					} else {
+						result.Data = msg
+					}
+				}
+			}
+		}
 		return result
 	})
 

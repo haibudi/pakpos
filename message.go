@@ -45,6 +45,8 @@ type MessageMonitor struct {
 	Targets          []string
 	Status           []string
 	DistributionType DistributionType
+
+	Broadcaster *Broadcaster
 }
 
 func ParseKey(key string) (string, string) {
@@ -55,8 +57,11 @@ func ParseKey(key string) (string, string) {
 	return keys[0], strings.Join(keys[1:], ":")
 }
 
-func NewMessageMonitor(targets []string, command, key string, data interface{}, expiryAfter time.Duration) *MessageMonitor {
+func NewMessageMonitor(broadcaster *Broadcaster, command, key string, data interface{}, expiryAfter time.Duration) *MessageMonitor {
+	targets := broadcaster.getChannelSubscribers(key)
+
 	m := new(MessageMonitor)
+	m.Broadcaster = broadcaster
 	m.Targets = targets
 	m.Key = key
 	m.Command = command
@@ -150,6 +155,37 @@ func (m *MessageMonitor) ditributeBroadcast() {
 
 func (m *MessageMonitor) distributeQue() {
 	//--- inform all targets that new message has been created
+	msg := toolkit.Jsonify(Message{Key: m.Key, Data: m.Data, Expiry: m.Expiry})
+	wg := new(sync.WaitGroup)
+
+	targetCount := len(m.Targets)
+	var newtargets []string
+	var failtargets []string
+	for _, t := range m.Targets {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, t string) {
+			defer wg.Done()
+			url := fmt.Sprintf("%s://%s/newkey", "http", t)
+			r, e := toolkit.HttpCall(url, "POST", msg, nil)
+			if e != nil {
+				m.Broadcaster.Log().Warning(fmt.Sprintf(
+					"Unable to inform %s for new que %s. %s",
+					url, m.Key, e.Error()))
+				failtargets = append(failtargets, t)
+			} else if r.StatusCode != 200 {
+				m.Broadcaster.Log().Warning(fmt.Sprintf(
+					"Unable to inform %s for new que %s  %s",
+					url, m.Key, r.Status))
+				failtargets = append(failtargets, t)
+			} else {
+
+				newtargets = append(newtargets, t)
+			}
+		}(wg, t)
+	}
+	wg.Wait()
+	m.Targets = newtargets
+	m.Broadcaster.Log().Info(fmt.Sprintf("Ping %d servers for new message %s. Succcess: %d Fail: %d", targetCount, m.Key, len(newtargets), len(failtargets)))
 
 	//-- loop while not all target complete receival or expire
 	for len(m.Targets) != m.Success && time.Now().After(m.Expiry) == false {

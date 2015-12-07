@@ -106,11 +106,10 @@ func (b *Broadcaster) removeChannelSubscriber(channel, subscriber string) {
 func (b *Broadcaster) Broadcast(k string, v interface{}) (*MessageMonitor, error) {
 	var mm *MessageMonitor
 	lk := strings.ToLower(k)
-	targets := b.getChannelSubscribers(k)
 	if lk == "stop" {
-		mm = NewMessageMonitor(targets, "stop", k, v, DefaultExpiry())
+		mm = NewMessageMonitor(b, "stop", k, v, DefaultExpiry())
 	} else {
-		mm = NewMessageMonitor(targets, "", k, v, DefaultExpiry())
+		mm = NewMessageMonitor(b, "", k, v, DefaultExpiry())
 	}
 	mm.DistributionType = DistributeAsBroadcast
 	b.Server.Log().Info(fmt.Sprintf("Broadcasting %s to %d server(s)", k, len(mm.Targets)))
@@ -118,8 +117,7 @@ func (b *Broadcaster) Broadcast(k string, v interface{}) (*MessageMonitor, error
 }
 
 func (b *Broadcaster) Que(k string, v interface{}) (*MessageMonitor, error) {
-	targets := b.getChannelSubscribers(k)
-	mm := NewMessageMonitor(targets, "", k, v, DefaultExpiry())
+	mm := NewMessageMonitor(b, "", k, v, DefaultExpiry())
 	mm.DistributionType = DistributeAsQue
 	b.Server.Log().Info(fmt.Sprintf("Create new que  %s to %d server(s)", k, len(mm.Targets)))
 	return mm, nil

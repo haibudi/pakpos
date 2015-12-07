@@ -71,29 +71,6 @@ func TestSubscribe(t *testing.T) {
 func TestSubscribeQue(t *testing.T) {
 	mm, _ := b.Que("Que01", "Queue 01")
 	mm.Wait()
-
-	var es []string
-	for _, s := range subs {
-		s.Log().Info(fmt.Sprintf("Receive que on node %s", s.Address))
-		qv, e := s.Receive("Que01")
-		if e != nil {
-			es = append(es, e.Error())
-		}
-		if toolkit.IsValid(qv) == false {
-			es = append(es, "Invalid que value returned. It is either nil or not valid")
-		} else {
-			if qv.(string) != "Queie 01" {
-				es = append(es, "Invalid que value returned. Got "+qv.(string))
-			} else {
-				t.Logf("Receiving %s", qv.(string))
-			}
-		}
-		time.Sleep(time.Duration(toolkit.RandInt(100)) * time.Millisecond)
-	}
-
-	if len(es) != 0 {
-		t.Errorf("Fail to receive que because: \n%s", strings.Join(es, "\n"))
-	}
 }
 
 func TestStop(t *testing.T) {
