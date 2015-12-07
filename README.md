@@ -5,7 +5,7 @@ Simple message broadcast and que platform. It is fully written in Go
 Still under development.
 
 ## Usage
-
+in-progress
 
 ## License
 MIT
