@@ -76,6 +76,7 @@ func (s *Subscriber) Start(address string) error {
 			}
 		}
 
+		// if no key is provided, check from the latest
 		if key == "" {
 			result.Status = toolkit.Status_NOK
 			result.Message = "No key has been provided to receive the message"
