@@ -151,17 +151,20 @@ func (b *Broadcaster) initRoute() {
 		tm := toolkit.M{}
 		e := k.GetPayload(&tm)
 		if e != nil {
+			fmt.Println(e.Error())
 			result.SetErrorTxt(fmt.Sprintf("Broadcaster GetMsg Payload Error: %s", e.Error()))
 		} else {
-			key := tm.Get("key", "").(string)
+			key := tm.Get("Key", "").(string)
 			if key == "" {
 				result.SetErrorTxt("Broadcaste GetMsg Error: No key is provided")
 			} else {
 				m, exist := b.messages[key]
+				//fmt.Println(m.Key + " : " + m.Data.(string))
 				if exist == false {
 					result.SetErrorTxt("Message " + key + " is not exist")
 				} else {
-					result.Data = m.Message
+					result.Data = m.Data
+					//fmt.Printf("Sent data: %v \n", m.Data)
 				}
 			}
 		}

@@ -78,8 +78,7 @@ func TestSubscribeQue(t *testing.T) {
 	for _, s := range subs {
 		d, e := s.GetMsg("Que01")
 		if e == nil {
-			t.Logf("Msg Que01 on %s receive %v", s.Address,
-				toolkit.JsonString(d))
+			t.Logf("Msg Que01 on %s receive %v", s.Address, d)
 		} else {
 			t.Logf("Msg Que01 on %s error %s", s.Address, e.Error())
 		}

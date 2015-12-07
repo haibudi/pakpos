@@ -123,12 +123,12 @@ func (s *Subscriber) getMsgAsResult(key string) *toolkit.Result {
 		result.Status = toolkit.Status_NOK
 		result.Message = "No key has been provided to receive the message"
 	} else {
-		url := fmt.Sprintf("%s/getmsg", s.BroadcasterAddress)
 		msgQue, exist := s.MessageQues[key]
 		if !exist {
 			result.Status = toolkit.Status_NOK
 			result.Message = "Key " + key + " is not exist on message que or it has been collected. Available keys are: " + strings.Join(s.messageKeys, ",")
 		} else {
+			url := fmt.Sprintf("%s/getmsg", s.BroadcasterAddress)
 			r, e := toolkit.HttpCall(url, "POST",
 				toolkit.Jsonify(msgQue), nil)
 			if e != nil {
@@ -136,12 +136,17 @@ func (s *Subscriber) getMsgAsResult(key string) *toolkit.Result {
 			} else if r.StatusCode != 200 {
 				result.SetErrorTxt("Subsciber ReceiveMsg Call Error: " + r.Status)
 			} else {
-				var msg Message
-				e := toolkit.Unjson(toolkit.HttpContent(r), &msg)
+				var resultMsg toolkit.Result
+				e := toolkit.Unjson(toolkit.HttpContent(r),
+					&resultMsg)
 				if e != nil {
 					result.SetErrorTxt(fmt.Sprintf("Subsciber ReceiveMsg Decode Error: ", e.Error()))
 				} else {
-					result.Data = msg
+					if resultMsg.Status == toolkit.Status_OK {
+						result.Data = resultMsg.Data
+					} else {
+						result.SetErrorTxt(resultMsg.Message)
+					}
 				}
 			}
 		}
