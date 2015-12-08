@@ -69,14 +69,14 @@ func TestSubscribe(t *testing.T) {
 }
 
 func TestSubscribeQue(t *testing.T) {
-	mm, _ := b.Que("Que01", "Queue 01")
+	mm, _ := b.Que("Group1:Que01", "Queue 01")
 	go func() {
 		mm.Wait()
 	}()
 
 	time.Sleep(2 * time.Millisecond)
 	for _, s := range subs {
-		d, e := s.GetMsg("Que01")
+		d, e := s.GetMsg("")
 		if e == nil {
 			t.Logf("Msg Que01 on %s receive %v", s.Address, d)
 		} else {
