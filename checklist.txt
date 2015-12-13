@@ -1,0 +1,44 @@
+REST Signature
+All will return toolkit.Result
+
+Broadcaster
+Broadcast --> s.newmsg --> deallocate msg
+Que --> s.newkey --> wait for msg to be collected --> b.getmsg --> s.msgrcvd --> deallocate msg
+Stop --> s.stop --> stop
+
+/login POST 
+userid:password
+Result -> token
+
+/broadcast
+user:token:key:msg
+Result
+
+/que
+user:token:key:msg
+
+/getmsg
+subcriber:key:token
+Result -> msg
+
+/nodeadd
+subscriber:password
+Result -> token
+
+Subscriber
+Result -> token
+
+/removenode
+subscriber:token
+Result
+
+Subscriber
+/newkey
+token:key
+Result
+
+/msgrcvd
+token:key
+Result
+
+

@@ -1,0 +1,297 @@
+package pakpos
+
+import (
+	"fmt"
+	"github.com/eaciit/knot/knot.v1"
+	"github.com/eaciit/toolkit"
+	"strings"
+	//"time"
+)
+
+type SubscriberInfo struct {
+	Address, Protocol string
+	Secret            string
+}
+
+func (si *SubscriberInfo) Url(s string) string {
+	return fmt.Sprintf("%s://%s/%s", si.Protocol, si.Address, s)
+}
+
+type Broadcaster struct {
+	knot.Server
+	Subscibers map[string]*SubscriberInfo
+
+	secret             string // this secret will be used to validate addnode request
+	userTokens         map[string]*Token
+	channelSubscribers map[string][]string
+	messages           map[string]*MessageMonitor
+}
+
+func (b *Broadcaster) Start(address string, secret string) {
+	b.Address = address
+	b.secret = secret
+	app := knot.NewApp("pakpos")
+	app.Register(b)
+	app.DefaultOutputType = knot.OutputJson
+	knot.RegisterApp(app)
+	go func() {
+		knot.StartApp(app, address)
+	}()
+}
+
+func (b *Broadcaster) initToken() {
+	if b.userTokens == nil {
+		b.userTokens = map[string]*Token{}
+	}
+
+	if b.channelSubscribers == nil {
+		b.channelSubscribers = map[string][]string{}
+	}
+
+	if b.messages == nil {
+		b.messages = map[string]*MessageMonitor{}
+	}
+}
+
+func (b *Broadcaster) validateToken(tokentype, secret, reference string) bool {
+	b.initToken()
+	ret := false
+	if tokentype == "user" {
+		if t, e := b.userTokens[reference]; !e {
+			return false
+		} else {
+			if t.Secret != secret {
+				return false
+			} else {
+				return true
+			}
+		}
+	} else if tokentype == "node" {
+		if s, e := b.Subscibers[reference]; !e {
+			return false
+		} else {
+			if s.Secret != secret {
+				return false
+			} else {
+				return true
+			}
+		}
+	}
+	return ret
+}
+
+func (b *Broadcaster) AddNode(k *knot.WebContext) interface{} {
+	var nodeModel struct {
+		Subscriber string
+		Secret     string
+	}
+	k.GetPayload(&nodeModel)
+
+	result := toolkit.NewResult()
+	if nodeModel.Subscriber == "" {
+		result.SetErrorTxt("Invalid subscriber info " + nodeModel.Subscriber)
+		return result
+	}
+
+	if nodeModel.Secret != b.secret {
+		result.SetErrorTxt("Not authorised")
+		return result
+	}
+
+	if b.Subscibers == nil {
+		b.Subscibers = map[string]*SubscriberInfo{}
+	} else {
+		if _, exist := b.Subscibers[nodeModel.Subscriber]; exist {
+			result.SetErrorTxt(fmt.Sprintf("%s has been registered as subsriber", nodeModel.Subscriber))
+			return result
+		}
+	}
+	si := new(SubscriberInfo)
+	si.Address = nodeModel.Subscriber
+	si.Protocol = "http"
+	si.Secret = toolkit.RandomString(32)
+	b.Subscibers[nodeModel.Subscriber] = si
+	result.Data = si.Secret
+	k.Server.Log().Info(fmt.Sprintf("%s register as new subscriber. Current active subscibers: %d", nodeModel.Subscriber, len(b.Subscibers)))
+	return result
+}
+
+func (b *Broadcaster) RemoveNode(k *knot.WebContext) interface{} {
+	var nodeModel struct {
+		Subscriber string
+		Secret     string
+	}
+	k.GetPayload(&nodeModel)
+
+	result := toolkit.NewResult()
+	if nodeModel.Subscriber == "" {
+		result.SetErrorTxt("Invalid subscriber info " + nodeModel.Subscriber)
+		return result
+	}
+
+	if b.validateToken("node", nodeModel.Secret, nodeModel.Subscriber) == false {
+		result.SetErrorTxt("Not authorised")
+		return result
+	}
+
+	sub := b.Subscibers[nodeModel.Subscriber]
+	_, e := CallResult(sub.Url("subscriber/stop"), "POST", toolkit.M{}.Set("secret", sub.Secret).ToBytes("json", nil))
+	if e != nil {
+		result.SetErrorTxt(e.Error())
+		return result
+	}
+
+	delete(b.Subscibers, nodeModel.Subscriber)
+	k.Server.Log().Info(fmt.Sprintf("%s has been removed as subscriber. Current active subscibers: %d", nodeModel.Subscriber, len(b.Subscibers)))
+	return result
+}
+
+func (b *Broadcaster) Broadcast(k *knot.WebContext) interface{} {
+	result := toolkit.NewResult()
+	var model struct {
+		UserID, Secret, Key string
+		Message             interface{}
+	}
+	k.GetPayload(&model)
+	if b.validateToken("user", model.Secret, model.UserID) == false {
+		result.SetErrorTxt("Not authorised")
+		return result
+	}
+
+	targets := b.getChannelSubscribers(model.Key)
+	if len(targets) == 0 {
+		result.SetErrorTxt("No subscriber can receive this message")
+		return result
+	}
+
+	mm := NewMessageMonitor(b, model.Key, model.Message, DefaultExpiry())
+	mm.DistributionType = DistributeAsBroadcast
+	result.Data = mm.Message
+	go func() {
+		mm.Wait()
+	}()
+	return result
+}
+
+func (b *Broadcaster) MsgStatus(k *knot.WebContext) interface{} {
+	k.Config.NoLog = true
+	result := toolkit.NewResult()
+	var model struct {
+		UserID, Secret, Key string
+	}
+	k.GetPayload(&model)
+	if b.validateToken("user", model.Secret, model.UserID) == false {
+		result.SetErrorTxt("Not authorised")
+		return result
+	}
+
+	m, e := b.messages[model.Key]
+	if e == false {
+		result.SetErrorTxt("Message " + model.Key + " is not exist")
+		return result
+	}
+
+	result.Data = fmt.Sprintf("Targets: %d, Success: %d, Fail: %d", len(m.Targets), m.Success, m.Fail)
+	return result
+}
+
+func (b *Broadcaster) getChannelSubscribers(key string) []string {
+	channel, key := ParseKey(key)
+	channel = strings.ToLower(channel)
+	if channel == "public" {
+		return func() []string {
+			s := []string{}
+			for _, sub := range b.Subscibers {
+				s = append(s, sub.Address)
+			}
+			return s
+		}()
+	} else {
+		if b.channelSubscribers == nil {
+			b.channelSubscribers = map[string][]string{}
+		}
+		if subs, exist := b.channelSubscribers[channel]; exist {
+			return subs
+		} else {
+			return []string{}
+		}
+	}
+}
+
+func (b *Broadcaster) SubscribeChannel(k *knot.WebContext) interface{} {
+	result := toolkit.NewResult()
+	var model struct {
+		Subscriber, Secret, Channel string
+	}
+	k.GetPayload(&model)
+	if b.validateToken("node", model.Secret, model.Subscriber) == false {
+		result.SetErrorTxt("Subscriber not authorised")
+		return result
+	}
+	subs, exist := b.channelSubscribers[model.Channel]
+	if !exist {
+		subs = []string{}
+	}
+	for _, s := range subs {
+		if s == model.Subscriber {
+			result.SetErrorTxt(fmt.Sprintf("%s has bene subscribe to channel %s", model.Subscriber, model.Channel))
+			return result
+		}
+	}
+	subs = append(subs, model.Subscriber)
+	b.channelSubscribers[model.Channel] = subs
+	return result
+}
+
+func (b *Broadcaster) Stop(k *knot.WebContext) interface{} {
+	m := toolkit.M{}
+	result := toolkit.NewResult()
+	k.GetPayload(&m)
+	defer func() {
+		if result.Status == toolkit.Status_OK {
+			k.Server.Stop()
+		}
+	}()
+	valid := b.validateToken("user", m.GetString("secret"),
+		m.GetString("userid"))
+	if !valid {
+		result.SetErrorTxt("Not authorised")
+		return result
+	}
+
+	return result
+}
+
+func (b *Broadcaster) Login(k *knot.WebContext) interface{} {
+	r := toolkit.NewResult()
+	var loginInfo struct{ UserID, Password string }
+	k.GetPayload(&loginInfo)
+	if loginInfo.UserID != "arief" && loginInfo.Password != "darmawan" {
+		r.SetErrorTxt("Invalid Login")
+		return r
+	}
+
+	b.initToken()
+	if t, te := b.userTokens[loginInfo.UserID]; te {
+		if !t.IsExpired() {
+			r.SetErrorTxt("User " + loginInfo.UserID + " has logged-in before and already has a valid session created")
+		}
+	}
+
+	t := NewToken("user", loginInfo.UserID)
+	b.userTokens[loginInfo.UserID] = t
+	r.Data = t.Secret
+	return r
+}
+
+func (b *Broadcaster) Logout(k *knot.WebContext) interface{} {
+	r := toolkit.NewResult()
+	m := toolkit.M{}
+	k.GetPayload(&m)
+	if !b.validateToken("user", m.GetString("secret"), m.GetString("userid")) {
+		r.SetErrorTxt("Not authorised")
+		return r
+	}
+	delete(b.userTokens, m.GetString("userid"))
+	return r
+}

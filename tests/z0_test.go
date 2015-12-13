@@ -1,7 +1,8 @@
-package pakpos
+package pakpos_test_0
 
 import (
 	"fmt"
+	. "github.com/eaciit/pakpos"
 	"github.com/eaciit/toolkit"
 	"strings"
 	"testing"

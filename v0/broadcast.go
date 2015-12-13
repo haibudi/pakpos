@@ -15,6 +15,15 @@ const (
 	ServerSubscriber  ServerRole = 10
 )
 
+type SubscriberInfo struct {
+	Address, Protocol string
+	Token             string
+}
+
+func (si *SubscriberInfo) Url(s string) string {
+	return fmt.Sprintf("%s://%s/%s", si.Protocol, si.Address, s)
+}
+
 type FnMessage func(toolkit.KvString) interface{}
 
 type IPostServer interface {
@@ -29,7 +38,7 @@ type PosServer struct {
 type Broadcaster struct {
 	//knot.Server
 	PosServer
-	Subscibers []string
+	Subscibers []SubscriberInfo
 
 	channelSubscribers map[string][]string
 	messages           map[string]*MessageMonitor
@@ -56,7 +65,13 @@ func (b *Broadcaster) getChannelSubscribers(key string) []string {
 	channel, key := ParseKey(key)
 	channel = strings.ToLower(channel)
 	if channel == "public" {
-		return b.Subscibers
+		return func() []string {
+			s := []string{}
+			for _, sub := range b.Subscibers {
+				s = append(s, sub.Address)
+			}
+			return s
+		}()
 	} else {
 		if b.channelSubscribers == nil {
 			b.channelSubscribers = map[string][]string{}
@@ -123,90 +138,4 @@ func (b *Broadcaster) Que(k string, v interface{}) (*MessageMonitor, error) {
 	mm.DistributionType = DistributeAsQue
 	b.Server.Log().Info(fmt.Sprintf("Create new que  %s to %d server(s)", k, len(mm.Targets)))
 	return mm, nil
-}
-
-func (b *Broadcaster) initRoute() {
-	//-- add node
-	b.Route("/nodeadd", func(kr *knot.WebContext) interface{} {
-		url := kr.Query("node")
-		b.Subscibers = append(b.Subscibers, url)
-		kr.Server.Log().Info(fmt.Sprintf("Add node %s to %s", url, b.Address))
-		return "OK"
-	})
-
-	//-- add channel subscribtion
-	b.Route("/channelregister", func(k *knot.WebContext) interface{} {
-		k.Config.OutputType = knot.OutputJson
-		result := toolkit.NewResult()
-		cr := &ChannelRegister{}
-		k.GetPayload(cr)
-		b.addChannelSubcriber(cr.Channel, cr.Subscriber)
-		return result
-	})
-
-	//-- get the message (used for DstributeAsQue type)
-	b.Route("/getmsg", func(k *knot.WebContext) interface{} {
-		k.Config.OutputType = knot.OutputJson
-		result := toolkit.NewResult()
-		tm := toolkit.M{}
-		e := k.GetPayload(&tm)
-		if e != nil {
-			fmt.Println(e.Error())
-			result.SetErrorTxt(fmt.Sprintf("Broadcaster GetMsg Payload Error: %s", e.Error()))
-		} else {
-			key := tm.Get("Key", "").(string)
-			if key == "" {
-				result.SetErrorTxt("Broadcaste GetMsg Error: No key is provided")
-			} else {
-				m, exist := b.messages[key]
-				//fmt.Println(m.Key + " : " + m.Data.(string))
-				if exist == false {
-					result.SetErrorTxt("Message " + key + " is not exist")
-				} else {
-					result.Data = m.Data
-					//fmt.Printf("Sent data: %v \n", m.Data)
-				}
-			}
-		}
-		return result
-	})
-
-	//-- invoked to identify if a msg has been received (used for DistAsQue)
-	b.Route("/msgreceived", func(k *knot.WebContext) interface{} {
-		k.Config.OutputType = knot.OutputJson
-		result := toolkit.NewResult()
-
-		tm := toolkit.M{}
-		e := k.GetPayload(&tm)
-		if e != nil {
-			result.SetErrorTxt("Broadcaster MsgReceived Payload Error: " + e.Error())
-		} else {
-			key := tm.Get("key", "").(string)
-			subscriber := tm.Get("subscriber", "").(string)
-
-			mm, exist := b.messages[key]
-			if exist == false {
-				result.SetErrorTxt("Broadcaster MsgReceived Error: " + key + " is not exist")
-			} else {
-				for tIndex, t := range mm.Targets {
-					if t == subscriber {
-						mm.Status[tIndex] = "OK"
-						break
-					}
-				}
-			}
-		}
-
-		return result
-	})
-
-	//-- gracefully stop the server
-	b.Route("/stop", func(k *knot.WebContext) interface{} {
-		defer k.Server.Stop()
-		return "OK"
-	})
-}
-
-func (b *Broadcaster) Stop() {
-	b.Broadcast("stop", "")
 }
