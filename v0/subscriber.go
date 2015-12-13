@@ -14,10 +14,13 @@ type MessageQue struct {
 	Collected bool
 }
 
+type FnTrigger func(m Message) (interface{}, error)
+
 type Subscriber struct {
 	PosServer
 	Protocol           string
 	BroadcasterAddress string
+	Actions            map[string]FnTrigger
 
 	messageKeys []string
 	MessageQues map[string]*MessageQue
@@ -36,6 +39,7 @@ func (s *Subscriber) Validate() error {
 
 func (s *Subscriber) Start(address string) error {
 	s.Address = address
+	s.Actions = map[string]FnTrigger{}
 	s.MessageQues = map[string]*MessageQue{}
 	broadcasterUrl := s.BroadcasterAddress + "/nodeadd?node=" + s.Address
 	r, e := toolkit.HttpCall(broadcasterUrl, "GET", nil, nil)
