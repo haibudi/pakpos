@@ -111,7 +111,7 @@ func TestBroadcast(t *testing.T) {
 }
 
 func TestSubcribeChannel(t *testing.T) {
-	_, e := CallResult("http://"+b.Address+"/broadcaster/subscribechannel", "POST",
+	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/subscribechannel", "POST",
 		toolkit.M{}.Set("Subscriber", subs[1].Address).Set("Secret", subs[1].Secret).Set("Channel", "Ch01").ToBytes("json", nil))
 	if e != nil {
 		t.Error(e)
@@ -135,7 +135,7 @@ func TestSubcribeChannel(t *testing.T) {
 }
 
 func TestQue(t *testing.T) {
-	_, e := CallResult("http://"+b.Address+"/broadcaster/que", "POST",
+	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/que", "POST",
 		toolkit.M{}.Set("userid", userid).Set("secret", userSecret).Set("key", "Ch01:QueMessage01").Set("data", "Ini adalah Channel 01 Que Message 01").ToBytes("json", nil))
 
 	if e != nil {
@@ -146,7 +146,7 @@ func TestQue(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	found := 0
 	for _, s := range subs {
-		_, e = CallResult("http://"+s.Address+"/subscriber/collectmessage", "POST",
+		_, e = toolkit.CallResult("http://"+s.Address+"/subscriber/collectmessage", "POST",
 			toolkit.M{}.Set("subscriber", s.Address).Set("secret", s.Secret).Set("key", "").ToBytes("json", nil))
 		if e == nil {
 			found++
