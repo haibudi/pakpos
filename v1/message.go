@@ -188,7 +188,6 @@ func (m *MessageMonitor) distributeBroadcast() {
 
 func (m *MessageMonitor) distributeQue() {
 	//--- inform all targets that new message has been created
-	msg := toolkit.Jsonify(Message{Key: m.Key, Data: m.Data, Expiry: m.Expiry})
 	wg := new(sync.WaitGroup)
 
 	targetCount := len(m.Targets)
@@ -198,17 +197,20 @@ func (m *MessageMonitor) distributeQue() {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup, t string) {
 			defer wg.Done()
-			url := fmt.Sprintf("%s://%s/newkey", "http", t)
-			r, e := toolkit.HttpCall(url, "POST", msg, nil)
+			sub, exist := m.broadcaster.Subscibers[t]
+			if !exist {
+				m.broadcaster.Log().Warning(fmt.Sprintf(
+					"Unable to send new que to %s for key %s. %s",
+					t, m.Key, "Subscriber not found"))
+				failtargets = append(failtargets, t)
+			}
+			url := sub.Url("subscriber/newkey")
+			msg := toolkit.M{}.Set("key", m.Key).Set("secret", sub.Secret).Set("expiry", m.Expiry).ToBytes("json", nil)
+			_, e := CallResult(url, "POST", msg)
 			if e != nil {
 				m.broadcaster.Log().Warning(fmt.Sprintf(
-					"Unable to inform %s for new que %s. %s",
+					"Unable to send new que to %s for key %s. %s",
 					url, m.Key, e.Error()))
-				failtargets = append(failtargets, t)
-			} else if r.StatusCode != 200 {
-				m.broadcaster.Log().Warning(fmt.Sprintf(
-					"Unable to inform %s for new que %s  %s",
-					url, m.Key, r.Status))
 				failtargets = append(failtargets, t)
 			} else {
 				newtargets = append(newtargets, t)
@@ -217,6 +219,10 @@ func (m *MessageMonitor) distributeQue() {
 	}
 	wg.Wait()
 	m.Targets = newtargets
+	if len(newtargets) == 0 {
+		m.broadcaster.Log().Error("No target is accepting key " + m.Key)
+		return
+	}
 	m.broadcaster.Log().Info(fmt.Sprintf("Ping %d servers for new message %s. Succcess: %d Fail: %d", targetCount, m.Key, len(newtargets), len(failtargets)))
 
 	//-- loop while not all target complete receival or expire

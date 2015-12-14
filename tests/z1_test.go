@@ -65,7 +65,7 @@ func TestBroadcast(t *testing.T) {
 			Set("userid", userid).
 			Set("secret", userSecret).
 			Set("key", "BC01").
-			Set("message", "Ini adalah Broadcast Message 01").
+			Set("data", "Ini adalah Broadcast Message 01").
 			ToBytes("json", nil),
 		200)
 	if e != nil {
@@ -115,6 +115,48 @@ func TestSubcribeChannel(t *testing.T) {
 		toolkit.M{}.Set("Subscriber", subs[1].Address).Set("Secret", subs[1].Secret).Set("Channel", "Ch01").ToBytes("json", nil))
 	if e != nil {
 		t.Error(e)
+		return
+	}
+
+	_, e = call(b.Address+"/broadcaster/broadcast", "POST",
+		toolkit.M{}.
+			Set("userid", userid).
+			Set("secret", userSecret).
+			Set("key", "Ch01:Message01").
+			Set("data", "Ini adalah Channel 01 - Broadcast Message 01").
+			ToBytes("json", nil),
+		200)
+	if e != nil {
+		t.Errorf("%s %s", b.Address+"/broadcaster/broadcast", e.Error())
+		return
+	}
+	time.Sleep(2 * time.Second)
+
+}
+
+func TestQue(t *testing.T) {
+	_, e := CallResult("http://"+b.Address+"/broadcaster/que", "POST",
+		toolkit.M{}.Set("userid", userid).Set("secret", userSecret).Set("key", "Ch01:QueMessage01").Set("data", "Ini adalah Channel 01 Que Message 01").ToBytes("json", nil))
+
+	if e != nil {
+		t.Errorf("Sending Que Error: " + e.Error())
+		return
+	}
+
+	time.Sleep(3 * time.Second)
+	found := 0
+	for _, s := range subs {
+		_, e = CallResult("http://"+s.Address+"/subscriber/collectmessage", "POST",
+			toolkit.M{}.Set("subscriber", s.Address).Set("secret", s.Secret).Set("key", "").ToBytes("json", nil))
+		if e == nil {
+			found++
+		} else {
+			t.Logf("Node %s, could not collect message: %s", s.Address, e.Error())
+		}
+	}
+
+	if found != 1 {
+		t.Errorf("Que not collected properly. Should only 1 subscriber collecting it, got %d", found)
 	}
 }
 

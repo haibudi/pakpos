@@ -150,11 +150,11 @@ func (b *Broadcaster) Broadcast(k *knot.WebContext) interface{} {
 	result := toolkit.NewResult()
 	var model struct {
 		UserID, Secret, Key string
-		Message             interface{}
+		Data                interface{}
 	}
 	k.GetPayload(&model)
 	if b.validateToken("user", model.Secret, model.UserID) == false {
-		result.SetErrorTxt("Not authorised")
+		result.SetErrorTxt("User " + model.UserID + " is not authorised")
 		return result
 	}
 
@@ -164,12 +164,78 @@ func (b *Broadcaster) Broadcast(k *knot.WebContext) interface{} {
 		return result
 	}
 
-	mm := NewMessageMonitor(b, model.Key, model.Message, DefaultExpiry())
+	mm := NewMessageMonitor(b, model.Key, model.Data, DefaultExpiry())
 	mm.DistributionType = DistributeAsBroadcast
 	result.Data = mm.Message
 	go func() {
 		mm.Wait()
 	}()
+	return result
+}
+
+func (b *Broadcaster) Que(k *knot.WebContext) interface{} {
+	result := toolkit.NewResult()
+	var model struct {
+		UserID, Secret, Key string
+		Data                interface{}
+	}
+	k.GetPayload(&model)
+	if b.validateToken("user", model.Secret, model.UserID) == false {
+		result.SetErrorTxt("User " + model.UserID + " is not authorised")
+		return result
+	}
+
+	targets := b.getChannelSubscribers(model.Key)
+	if len(targets) == 0 {
+		result.SetErrorTxt("No subscriber can receive this message")
+		return result
+	}
+
+	mm := NewMessageMonitor(b, model.Key, model.Data, DefaultExpiry())
+	mm.DistributionType = DistributeAsQue
+	result.Data = mm.Message
+	go func() {
+		mm.Wait()
+	}()
+	return result
+}
+
+func (b *Broadcaster) GetMessage(k *knot.WebContext) interface{} {
+	result := toolkit.NewResult()
+	var model struct {
+		Subscriber, Secret, Key string
+	}
+	k.GetPayload(&model)
+	if model.Key == "" {
+		return result.SetErrorTxt("Key is empty")
+	}
+	if !b.validateToken("node", model.Secret, model.Subscriber) {
+		return result.SetErrorTxt("Subscriber is not authorised")
+	}
+	msg, exist := b.messages[model.Key]
+	if !exist {
+		return result.SetErrorTxt(fmt.Sprintf("Message %s is not exist. Either it has been fully collected or message is never exist", model.Key))
+	}
+	targets := b.getChannelSubscribers(model.Key)
+	found := false
+	foundIndex := 0
+	for idx, t := range targets {
+		if t == model.Subscriber {
+			found = true
+			foundIndex = idx
+			break
+		}
+	}
+	if !found {
+		return result.SetErrorTxt(fmt.Sprintf("Subscibers %s is not valid subscriber of message %s", model.Subscriber, model.Key))
+	}
+	targets = append(targets[0:foundIndex], targets[foundIndex+1:]...)
+	if len(targets) == 0 {
+		delete(b.channelSubscribers, model.Key)
+	} else {
+		b.channelSubscribers[model.Key] = targets
+	}
+	result.Data = msg.Data
 	return result
 }
 
@@ -197,6 +263,7 @@ func (b *Broadcaster) MsgStatus(k *knot.WebContext) interface{} {
 
 func (b *Broadcaster) getChannelSubscribers(key string) []string {
 	channel, key := ParseKey(key)
+	//fmt.Println("Get subsriber for " + channel + ":" + key)
 	channel = strings.ToLower(channel)
 	if channel == "public" {
 		return func() []string {
@@ -228,18 +295,20 @@ func (b *Broadcaster) SubscribeChannel(k *knot.WebContext) interface{} {
 		result.SetErrorTxt("Subscriber not authorised")
 		return result
 	}
+	model.Channel = strings.ToLower(model.Channel)
 	subs, exist := b.channelSubscribers[model.Channel]
 	if !exist {
 		subs = []string{}
 	}
 	for _, s := range subs {
 		if s == model.Subscriber {
-			result.SetErrorTxt(fmt.Sprintf("%s has bene subscribe to channel %s", model.Subscriber, model.Channel))
+			result.SetErrorTxt(fmt.Sprintf("%s has been subscribe to channel %s", model.Subscriber, model.Channel))
 			return result
 		}
 	}
 	subs = append(subs, model.Subscriber)
 	b.channelSubscribers[model.Channel] = subs
+	b.Server.Log().Info(fmt.Sprintf("Node %s successfully subscibed to channel %s. Current subscribers count: %d", model.Subscriber, model.Channel, len(subs)))
 	return result
 }
 
