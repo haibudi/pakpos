@@ -135,7 +135,7 @@ func (b *Broadcaster) RemoveNode(k *knot.WebContext) interface{} {
 	}
 
 	sub := b.Subscibers[nodeModel.Subscriber]
-	_, e := CallResult(sub.Url("subscriber/stop"), "POST", toolkit.M{}.Set("secret", sub.Secret).ToBytes("json", nil))
+	_, e := toolkit.CallResult(sub.Url("subscriber/stop"), "POST", toolkit.M{}.Set("secret", sub.Secret).ToBytes("json", nil))
 	if e != nil {
 		result.SetErrorTxt(e.Error())
 		return result

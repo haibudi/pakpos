@@ -32,7 +32,7 @@ func (s *Subscriber) Start(address, broadcaster, broadcastServerSecret string) e
 	s.messages = map[string]*Message{}
 
 	//--- get confirmation from Broadcaster first
-	r, e := CallResult(broadcaster+"addnode", "POST",
+	r, e := toolkit.CallResult(broadcaster+"addnode", "POST",
 		toolkit.M{}.Set("subscriber", s.Address).Set("secret", broadcastServerSecret).ToBytes("json", nil))
 	if e != nil {
 		return e
@@ -52,7 +52,7 @@ func (s *Subscriber) Start(address, broadcaster, broadcastServerSecret string) e
 
 func (s *Subscriber) ReceiveMessage(messageType string, key string, message interface{}) error {
 	if messageType == "Que" {
-		r, e := CallResult(s.Broadcaster+"getmessage", "POST",
+		r, e := toolkit.CallResult(s.Broadcaster+"getmessage", "POST",
 			toolkit.M{}.Set("subscriber", s.Address).Set("secret", s.Secret).Set("key", key).ToBytes("", nil))
 		if e != nil {
 			return e

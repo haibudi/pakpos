@@ -206,7 +206,7 @@ func (m *MessageMonitor) distributeQue() {
 			}
 			url := sub.Url("subscriber/newkey")
 			msg := toolkit.M{}.Set("key", m.Key).Set("secret", sub.Secret).Set("expiry", m.Expiry).ToBytes("json", nil)
-			_, e := CallResult(url, "POST", msg)
+			_, e := toolkit.CallResult(url, "POST", msg)
 			if e != nil {
 				m.broadcaster.Log().Warning(fmt.Sprintf(
 					"Unable to send new que to %s for key %s. %s",
