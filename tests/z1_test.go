@@ -159,6 +159,17 @@ func TestQue(t *testing.T) {
 		t.Errorf("Que not collected properly. Should only 1 subscriber collecting it, got %d", found)
 	}
 }
+func TestQueInvalid(t *testing.T) {
+	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/que", "POST",
+		toolkit.M{}.Set("userid", userid).Set("secret", userSecret).Set("key", "Ch01:QueMessage02").Set("data", "Ini adalah Channel 02 Que Message 02").ToBytes("json", nil))
+
+	if e != nil {
+		t.Errorf("Sending Que Error: " + e.Error())
+		return
+	}
+
+	time.Sleep(15 * time.Second)
+}
 
 func TestClose0(t *testing.T) {
 	_, e := call(b.Address+"/broadcaster/stop", "GET",
