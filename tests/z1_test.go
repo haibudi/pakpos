@@ -21,7 +21,7 @@ var (
 
 func init() {
 	b = new(Broadcaster)
-	b.Start("localhost:12345", broadcastSecret)
+	b.Start("https://localhost:12345", broadcastSecret)
 
 	/*
 		for i := 0; i < 3; i++ {
@@ -146,7 +146,7 @@ func TestQue(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	found := 0
 	for _, s := range subs {
-		_, e = toolkit.CallResult(s.Address+"/subscriber/collectmessage", "POST",
+		_, e = toolkit.CallResult("http://"+s.Address+"/subscriber/collectmessage", "POST",
 			toolkit.M{}.Set("subscriber", s.Address).Set("secret", s.Secret).Set("key", "").ToBytes("json", nil))
 		if e == nil {
 			found++
