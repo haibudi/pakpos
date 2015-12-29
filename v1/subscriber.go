@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"github.com/eaciit/knot/knot.v1"
 	"github.com/eaciit/toolkit"
+	"net/url"
 	"time"
+)
+
+var (
+	address    string
+	urlAddress = url.Parse(address)
 )
 
 type Subscriber struct {
@@ -18,7 +24,7 @@ type Subscriber struct {
 
 func (s *Subscriber) BaseUrl() string {
 	if s.Protocol == "" {
-		s.Protocol = "http"
+		s.Protocol = urlAddress.Scheme
 	}
 	return fmt.Sprintf("%s://%s/", s.Protocol, s.Address)
 }
@@ -28,7 +34,7 @@ func (s *Subscriber) Start(address, broadcaster, broadcastServerSecret string) e
 		broadcaster += "/broadcaster/"
 	}
 	s.Broadcaster = broadcaster
-	s.Address = address
+	s.Address = urlAddress.Scheme + "://" + address
 	s.messages = map[string]*Message{}
 
 	//--- get confirmation from Broadcaster first

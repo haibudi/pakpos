@@ -6,6 +6,12 @@ import (
 	"github.com/eaciit/toolkit"
 	"strings"
 	//"time"
+	"net/url"
+)
+
+var (
+	address    string
+	urlAddress = url.Parse(address)
 )
 
 type SubscriberInfo struct {
@@ -27,8 +33,8 @@ type Broadcaster struct {
 	messages           map[string]*MessageMonitor
 }
 
-func (b *Broadcaster) Start(address string, secret string) {
-	b.Address = address
+func (b *Broadcaster) Start(address, secret string) {
+	b.Address = urlAddress.Scheme + "://" + address
 	b.secret = secret
 	app := knot.NewApp("pakpos")
 	app.Register(b)
@@ -108,7 +114,7 @@ func (b *Broadcaster) AddNode(k *knot.WebContext) interface{} {
 	}
 	si := new(SubscriberInfo)
 	si.Address = nodeModel.Subscriber
-	si.Protocol = "http"
+	si.Protocol = urlAddress.Scheme
 	si.Secret = toolkit.RandomString(32)
 	b.Subscibers[nodeModel.Subscriber] = si
 	result.Data = si.Secret
