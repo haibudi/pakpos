@@ -4,7 +4,7 @@ import (
 	"fmt"
 	. "github.com/eaciit/pakpos/v1"
 	"github.com/eaciit/toolkit"
-	"strings"
+	//"strings"
 	"testing"
 	"time"
 	//"net/http"
@@ -111,7 +111,7 @@ func TestBroadcast(t *testing.T) {
 }
 
 func TestSubcribeChannel(t *testing.T) {
-	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/subscribechannel", "POST",
+	_, e := toolkit.CallResult(b.Address+"/broadcaster/subscribechannel", "POST",
 		toolkit.M{}.Set("Subscriber", subs[1].Address).Set("Secret", subs[1].Secret).Set("Channel", "Ch01").ToBytes("json", nil))
 	if e != nil {
 		t.Error(e)
@@ -135,7 +135,7 @@ func TestSubcribeChannel(t *testing.T) {
 }
 
 func TestQue(t *testing.T) {
-	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/que", "POST",
+	_, e := toolkit.CallResult(b.Address+"/broadcaster/que", "POST",
 		toolkit.M{}.Set("userid", userid).Set("secret", userSecret).Set("key", "Ch01:QueMessage01").Set("data", "Ini adalah Channel 01 Que Message 01").ToBytes("json", nil))
 
 	if e != nil {
@@ -146,7 +146,7 @@ func TestQue(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	found := 0
 	for _, s := range subs {
-		_, e = toolkit.CallResult("http://"+s.Address+"/subscriber/collectmessage", "POST",
+		_, e = toolkit.CallResult(s.Address+"/subscriber/collectmessage", "POST",
 			toolkit.M{}.Set("subscriber", s.Address).Set("secret", s.Secret).Set("key", "").ToBytes("json", nil))
 		if e == nil {
 			found++
@@ -160,7 +160,7 @@ func TestQue(t *testing.T) {
 	}
 }
 func TestQueInvalid(t *testing.T) {
-	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/que", "POST",
+	_, e := toolkit.CallResult(b.Address+"/broadcaster/que", "POST",
 		toolkit.M{}.Set("userid", userid).Set("secret", userSecret).Set("key", "Ch01:QueMessage02").Set("data", "Ini adalah Channel 02 Que Message 02").ToBytes("json", nil))
 
 	if e != nil {
@@ -180,9 +180,6 @@ func TestClose0(t *testing.T) {
 }
 
 func call(url, call string, data []byte, expectedStatus int) (*toolkit.Result, error) {
-	if !strings.HasPrefix(url, "http://") {
-		url = "http://" + url
-	}
 	cfg := toolkit.M{}
 	if expectedStatus != 0 {
 		cfg.Set("expectedstatus", expectedStatus)
