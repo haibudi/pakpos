@@ -4,8 +4,16 @@ import (
 	"fmt"
 	"github.com/eaciit/knot/knot.v1"
 	"github.com/eaciit/toolkit"
+	_ "net/http"
+	"net/url"
+	"os"
+	//"os/exec"
 	"strings"
 	//"time"
+)
+
+var (
+	pro string
 )
 
 type SubscriberInfo struct {
@@ -25,18 +33,45 @@ type Broadcaster struct {
 	userTokens         map[string]*Token
 	channelSubscribers map[string][]string
 	messages           map[string]*MessageMonitor
+	Certificate        string
+	PrivateKey         string
 }
 
-func (b *Broadcaster) Start(address string, secret string) {
-	b.Address = address
-	b.secret = secret
-	app := knot.NewApp("pakpos")
-	app.Register(b)
-	app.DefaultOutputType = knot.OutputJson
-	knot.RegisterApp(app)
-	go func() {
-		knot.StartApp(app, address)
-	}()
+func (b *Broadcaster) Start(address, secret string) {
+	var u, er = url.Parse(address)
+	if er != nil {
+		fmt.Println(er.Error())
+	}
+
+	var scheme = u.Scheme
+	pro = scheme
+
+	if scheme == "https" {
+		basepath, _ := os.Getwd()
+		b.Address = address
+		b.secret = secret
+		app := knot.NewApp("pakpos")
+		app.Register(b)
+		app.UseSSL = true
+		app.CertificatePath = basepath + b.Certificate
+		app.PrivateKeyPath = basepath + b.PrivateKey
+		app.DefaultOutputType = knot.OutputJson
+		knot.RegisterApp(app)
+		go func() {
+			knot.StartApp(app, address)
+		}()
+
+	} else {
+		b.Address = address
+		b.secret = secret
+		app := knot.NewApp("pakpos")
+		app.Register(b)
+		app.DefaultOutputType = knot.OutputJson
+		knot.RegisterApp(app)
+		go func() {
+			knot.StartApp(app, address)
+		}()
+	}
 }
 
 func (b *Broadcaster) initToken() {
@@ -108,7 +143,7 @@ func (b *Broadcaster) AddNode(k *knot.WebContext) interface{} {
 	}
 	si := new(SubscriberInfo)
 	si.Address = nodeModel.Subscriber
-	si.Protocol = "http"
+	si.Protocol = pro
 	si.Secret = toolkit.RandomString(32)
 	b.Subscibers[nodeModel.Subscriber] = si
 	result.Data = si.Secret

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eaciit/knot/knot.v1"
 	"github.com/eaciit/toolkit"
+	//"net/url"
 	"time"
 )
 
@@ -18,7 +19,7 @@ type Subscriber struct {
 
 func (s *Subscriber) BaseUrl() string {
 	if s.Protocol == "" {
-		s.Protocol = "http"
+		s.Protocol = "https"
 	}
 	return fmt.Sprintf("%s://%s/", s.Protocol, s.Address)
 }

@@ -2,9 +2,9 @@ package pakpos_test_1
 
 import (
 	"fmt"
-	. "github.com/eaciit/pakpos/v1"
 	"github.com/eaciit/toolkit"
-	"strings"
+	. "pakpos/v1"
+	//"strings"
 	"testing"
 	"time"
 	//"net/http"
@@ -21,7 +21,9 @@ var (
 
 func init() {
 	b = new(Broadcaster)
-	b.Start("localhost:12345", broadcastSecret)
+	b.CertificatePath = "/cert.pem"
+	b.PrivateKeyPath = "/key.pem"
+	b.Start("https://localhost:12345", broadcastSecret)
 
 	/*
 		for i := 0; i < 3; i++ {
@@ -111,7 +113,7 @@ func TestBroadcast(t *testing.T) {
 }
 
 func TestSubcribeChannel(t *testing.T) {
-	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/subscribechannel", "POST",
+	_, e := toolkit.CallResult(b.Address+"/broadcaster/subscribechannel", "POST",
 		toolkit.M{}.Set("Subscriber", subs[1].Address).Set("Secret", subs[1].Secret).Set("Channel", "Ch01").ToBytes("json", nil))
 	if e != nil {
 		t.Error(e)
@@ -135,7 +137,7 @@ func TestSubcribeChannel(t *testing.T) {
 }
 
 func TestQue(t *testing.T) {
-	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/que", "POST",
+	_, e := toolkit.CallResult(b.Address+"/broadcaster/que", "POST",
 		toolkit.M{}.Set("userid", userid).Set("secret", userSecret).Set("key", "Ch01:QueMessage01").Set("data", "Ini adalah Channel 01 Que Message 01").ToBytes("json", nil))
 
 	if e != nil {
@@ -160,7 +162,7 @@ func TestQue(t *testing.T) {
 	}
 }
 func TestQueInvalid(t *testing.T) {
-	_, e := toolkit.CallResult("http://"+b.Address+"/broadcaster/que", "POST",
+	_, e := toolkit.CallResult(b.Address+"/broadcaster/que", "POST",
 		toolkit.M{}.Set("userid", userid).Set("secret", userSecret).Set("key", "Ch01:QueMessage02").Set("data", "Ini adalah Channel 02 Que Message 02").ToBytes("json", nil))
 
 	if e != nil {
@@ -180,9 +182,6 @@ func TestClose0(t *testing.T) {
 }
 
 func call(url, call string, data []byte, expectedStatus int) (*toolkit.Result, error) {
-	if !strings.HasPrefix(url, "http://") {
-		url = "http://" + url
-	}
 	cfg := toolkit.M{}
 	if expectedStatus != 0 {
 		cfg.Set("expectedstatus", expectedStatus)
